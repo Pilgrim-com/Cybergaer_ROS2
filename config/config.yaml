@@ -1,0 +1,141 @@
+can:
+  interface: "canalystii"
+  # interface: "socketcan"
+  channel: 0
+  bitrate: 1000000
+
+motors:
+# Left Leg
+  - id: 1
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: 3.0
+    # raw_pos_zero: 1.0295047303133003
+    raw_pos_zero: 1.4240948070921822
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 2
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 0.42473508149279204
+    raw_pos_zero: 0.40210851961754457
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 3
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 0.633731648020825
+    raw_pos_zero: 0.866516784601767
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 4
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 0.9957643080457701
+    raw_pos_zero: 2.5378498292855216
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 5
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 0.9923012935757108
+    raw_pos_zero: 1.7333814556569127
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 6
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 1.1606582539695047
+    raw_pos_zero: 1.172934122539448
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+#  Right Leg
+  - id: 7
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: 3.0
+    # raw_pos_zero: -0.5225163438882503
+    raw_pos_zero: -0.8031343680313912
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 8
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: -0.46460768552956605
+    raw_pos_zero: -0.46691636184293767
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 9
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 1.0237637196137674
+    raw_pos_zero: 0.9934633017533714
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 10
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 0.8009381052684215
+    raw_pos_zero: -0.8293060557834082
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 11
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: -1.1668057757806953
+    raw_pos_zero: 0.3619668138178159
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
+  - id: 12
+    limit_spd: 3.0
+    limit_cur: 3.0
+    control_mode: 0 
+    max_distance: -2.2
+    # raw_pos_zero: 1.0678548351866026
+    raw_pos_zero: 1.069005338332802
+    flip: True
+    mit:
+      kp: 5.0
+      kd: 0.5
