@@ -10,17 +10,25 @@ import math
 import numpy as np
 import time
 
+# Import global config access functions
+from config import load_config, get_motor_ids
+
 class MotorControlGroupPublisher(Node):
     def __init__(self):
         super().__init__('motor_control_group_publisher')
-        
+
+        # Load configuration to populate global motor IDs
+        config_file = self.declare_parameter('config_file', 'config.yaml').value
+        load_config(config_file)
+        self.get_logger().info("Config loaded")
+
         best_effort_qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,  # Only keep the most recent message
             durability=QoSDurabilityPolicy.VOLATILE
-        )        
-        
+        )
+
         # Initialize the service availability flag
         self.service_available = False
         
@@ -54,9 +62,10 @@ class MotorControlGroupPublisher(Node):
         
         # Dictionary to store current motor parameters
         self.motor_params = {}
-        
-        # Define which motor IDs are valid in your system
-        self.valid_motor_ids = [1, 2, 5, 6]
+
+        # Use global motor IDs from config instead of hardcoding
+        self.valid_motor_ids = get_motor_ids()
+        self.get_logger().info(f"Using motor IDs from config: {self.valid_motor_ids}")
         
         # Default values for each parameter
         self.default_values = {

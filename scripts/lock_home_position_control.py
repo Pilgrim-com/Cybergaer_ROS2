@@ -9,15 +9,25 @@ import math
 import numpy as np
 import time
 
+# Import global config access functions
+from config import load_config, get_motor_ids
+
 class MotorControlGroupPublisher(Node):
     def __init__(self):
         super().__init__('motor_control_group_publisher')
+
+        # Load configuration to populate global motor IDs
+        config_file = self.declare_parameter('config_file', 'config.yaml').value
+        load_config(config_file)
+        self.motor_ids = get_motor_ids()
+        self.get_logger().info(f"Config loaded. Using motor IDs: {self.motor_ids}")
+
         self.cli = self.create_client(SetParam, 'setparam')
         if not self.cli.wait_for_service(timeout_sec=5.0):
             self.get_logger().error("setparam service not available after 5s")
             rclpy.shutdown()
-            return        
-        
+            return
+
         # Send the initial request and wait for it to complete before continuing
         self.get_logger().info("Sending initial motor enable command...")
         result = self.send_request_sync(control_mode=4, motor_id=0)
@@ -130,24 +140,27 @@ class MotorControlGroupPublisher(Node):
 
         msg = MotorControlGroup()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "base_link" 
-        
-        motor_ids = [1, 2, 5, 6]
-        motors = {mid: MotorControl() for mid in motor_ids}
-        
-        motors[1].set_point.position = position_cmd #np.deg2rad(60.0)
-        motors[2].set_point.position = np.deg2rad(-100.0)
-        motors[5].set_point.position = position_cmd #np.deg2rad(60.0)
-        motors[6].set_point.position = np.deg2rad(-100.0)
-        
+        msg.header.frame_id = "base_link"
+
+        # Use motor IDs from global config instead of hardcoding
+        motors = {mid: MotorControl() for mid in self.motor_ids}
+
+        # Set positions based on motor IDs (only if they exist in config)
+        for mid in self.motor_ids:
+            if mid in [1, 5]:  # Hip motors (if they exist)
+                motors[mid].set_point.position = position_cmd
+            elif mid in [2, 6]:  # Knee motors (if they exist)
+                motors[mid].set_point.position = np.deg2rad(-100.0)
+            else:
+                motors[mid].set_point.position = 0.0
+
         for mid, mc in motors.items():
             mc.motor_id = mid
             mc.control_mode = 1
-            # mc.set_point.position = 0.0
-            mc.set_point.velocity = 0.0 if mid in  (1, 6) else 0.0
-            mc.set_point.effort   = 0.0 if mid in (1, 6) else 0.0
-            mc.set_point.kp       = 5.0 if mid in (1, 6) else 0.0
-            mc.set_point.kd       = 0.5  if mid in (1, 6) else 0.0
+            mc.set_point.velocity = 0.0
+            mc.set_point.effort = 0.0
+            mc.set_point.kp = 5.0 if mid in (1, 6) else 0.0
+            mc.set_point.kd = 0.5 if mid in (1, 6) else 0.0
 
         # Assign to message and publish
         msg.motor_controls = list(motors.values())

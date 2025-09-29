@@ -11,20 +11,36 @@ import numpy as np
 import math
 from typing import List, Tuple
 
+# Import global config access functions
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from config import load_config, get_motor_ids
+
 a1, a2 = 0.2, 0.16
 
 class MotorControlGroupPublisher(Node):
     def __init__(self):
         super().__init__('motor_control_group_publisher')
+
+        # Load configuration to populate global motor IDs
+        config_file = self.declare_parameter('config_file', 'config.yaml').value
+        load_config(config_file)
+        motor_ids = get_motor_ids()
+        self.get_logger().info(f"Config loaded. Using motor IDs: {motor_ids}")
+
+        # Store motor IDs (expects 4 motors: [1, 2, 5, 6] or similar)
+        self.motor_ids = motor_ids if len(motor_ids) >= 4 else [1, 2, 5, 6]
+
         self.publisher_ = self.create_publisher(MotorControlGroup, 'motor_group_command', 10)
-        self.timer_period = 0.01/2.0  
+        self.timer_period = 0.01/2.0
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
         self.create_service(Spawn, 'SetPosition', self.handle_ik)
         self.get_logger().info("Motor Control Group Publisher started")
         self.start_time = self.get_clock().now().nanoseconds * 1e-9
-        
+
         self.qm = [0.0, 0.0, 0.0, 0.0]
-        self.mode = 5 #Disable
+        self.mode = 5  # Disable
 
     def handle_ik(self, request:Spawn, response:Spawn):
         
@@ -60,45 +76,22 @@ class MotorControlGroupPublisher(Node):
 
         msg = MotorControlGroup()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "base_link" 
-        
-        motor1 = MotorControl()
-        motor1.motor_id = 1
-        motor1.control_mode = self.mode
-        motor1.set_point.position = self.qm[0]
-        motor1.set_point.velocity = 1.2
-        motor1.set_point.effort = 5.0
-        motor1.set_point.kp = 5.5
-        motor1.set_point.kd = 0.6
-        
-        motor2 = MotorControl()
-        motor2.motor_id = 2
-        motor2.control_mode = self.mode
-        motor2.set_point.position = self.qm[1]
-        motor2.set_point.velocity = 1.2
-        motor2.set_point.effort = 5.0
-        motor2.set_point.kp = 5.5
-        motor2.set_point.kd = 0.6
+        msg.header.frame_id = "base_link"
 
-        motor5 = MotorControl()
-        motor5.motor_id = 5
-        motor5.control_mode = self.mode
-        motor5.set_point.position = self.qm[2]
-        motor5.set_point.velocity = 1.2
-        motor5.set_point.effort = 5.0
-        motor5.set_point.kp = 5.5
-        motor5.set_point.kd = 0.6
+        # Create motor controls using motor IDs from config
+        motor_controls = []
+        for i, motor_id in enumerate(self.motor_ids[:4]):  # Use first 4 motors
+            motor = MotorControl()
+            motor.motor_id = motor_id
+            motor.control_mode = self.mode
+            motor.set_point.position = self.qm[i] if i < len(self.qm) else 0.0
+            motor.set_point.velocity = 1.2
+            motor.set_point.effort = 5.0
+            motor.set_point.kp = 5.5
+            motor.set_point.kd = 0.6
+            motor_controls.append(motor)
 
-        motor6 = MotorControl()
-        motor6.motor_id = 6
-        motor6.control_mode = self.mode
-        motor6.set_point.position = self.qm[3]
-        motor6.set_point.velocity = 1.2
-        motor6.set_point.effort = 5.0
-        motor6.set_point.kp = 5.5
-        motor6.set_point.kd = 0.6
-
-        msg.motor_controls = [motor1, motor2, motor5, motor6] 
+        msg.motor_controls = motor_controls 
 
         self.publisher_.publish(msg)
 

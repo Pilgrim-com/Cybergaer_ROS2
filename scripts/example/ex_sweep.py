@@ -8,22 +8,38 @@ from std_msgs.msg import Header
 import math
 import numpy as np
 
+# Import global config access functions
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from config import load_config, get_motor_ids
+
 class MotorControlGroupPublisher(Node):
     def __init__(self):
         super().__init__('motor_control_group_publisher')
+
+        # Load configuration to populate global motor IDs
+        config_file = self.declare_parameter('config_file', 'config.yaml').value
+        load_config(config_file)
+        motor_ids = get_motor_ids()
+        self.get_logger().info(f"Config loaded. Using motor IDs: {motor_ids}")
+
+        # Use motor IDs from config (default to [1, 5] if not enough motors)
+        self.motor_ids = motor_ids if len(motor_ids) >= 2 else [1, 5]
+
         self.cli = self.create_client(SetParam, 'setparam')
         if not self.cli.wait_for_service(timeout_sec=5.0):
             self.get_logger().error("setparam service not available after 5s")
             rclpy.shutdown()
-            return        
-        
+            return
+
         self.publisher_ = self.create_publisher(MotorControlGroup, 'motor_group_command', 10)
-        self.timer_period = 0.01/2.0  
+        self.timer_period = 0.01/2.0
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
         self.get_logger().info("Motor Control Group Publisher started")
         self.start_time = self.get_clock().now().nanoseconds * 1e-9
         self.previous_time = self.start_time
-        
+
         self.send_request(control_mode=4, motor_id=0)
         
 
@@ -66,24 +82,22 @@ class MotorControlGroupPublisher(Node):
 
         msg = MotorControlGroup()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "base_link" 
-        
-        motor_ids = [1, 5]
-        motors = {mid: MotorControl() for mid in motor_ids}
-        
-        motors[1].set_point.position = np.deg2rad(60.0)
-        # motors[2].set_point.position = np.deg2rad(-120.0)
-        motors[5].set_point.position = np.deg2rad(60.0)
-        # motors[6].set_point.position = np.deg2rad(-120.0)
-        
+        msg.header.frame_id = "base_link"
+
+        # Use motor IDs from global config instead of hardcoding
+        motors = {mid: MotorControl() for mid in self.motor_ids[:2]}  # Use first 2 motors
+
+        # Set positions for motors that exist in config
+        for mid in self.motor_ids[:2]:
+            motors[mid].set_point.position = np.deg2rad(60.0)
+
         for mid, mc in motors.items():
             mc.motor_id = mid
             mc.control_mode = 1
-            # mc.set_point.position = 0.0
-            mc.set_point.velocity = 1.2 if mid in  (7, 8) else 0.0
-            mc.set_point.effort   = 10.0 if mid in (7, 8) else 0.0
-            mc.set_point.kp       = 50.5 if mid in (7, 8) else 0.0
-            mc.set_point.kd       = 0.6  if mid in (7, 8) else 0.0
+            mc.set_point.velocity = 1.2 if mid in (7, 8) else 0.0
+            mc.set_point.effort = 10.0 if mid in (7, 8) else 0.0
+            mc.set_point.kp = 50.5 if mid in (7, 8) else 0.0
+            mc.set_point.kd = 0.6 if mid in (7, 8) else 0.0
 
         # Assign to message and publish
         msg.motor_controls = list(motors.values())

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Performance benchmarks with different motor counts:
 # 1 motor -> 620 hz -> 392 hz
 # 2 motor -> 415 hz -> 232 hz
 # 3 motor -> 314 hz -> 167 hz
@@ -12,19 +13,23 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
-from std_srvs.srv import Trigger 
+from std_srvs.srv import Trigger
 from cybergear_interfaces.msg import MotorControlGroup, MotorControl
 from cybergear_interfaces.srv import SetParam
 
 import time
 import array
 import functools
-
-import time
 import can
 from cybergear import CyberGear
 
-from config import load_config
+# Import from config module with global parameter access
+from config import (
+    load_config, 
+    get_motor_ids, 
+    get_motor_count,
+    print_motor_summary
+)
 from controller import CyberGearController
 from controller import get_feedback
 from controller import MODE_NAMES
@@ -33,24 +38,29 @@ class CyberGearROS2Node(Node):
     def __init__(self):
         super().__init__('cybergear_driver_node')
         
-        # Load configuration
+        # Load configuration (this populates global variables in config.py)
         config_file = self.declare_parameter('config_file', 'config.yaml').value
         config = load_config(config_file)
         self.get_logger().info("Config loaded")
+        
+        # Print configuration summary for verification
+        print_motor_summary()
         
         # Initialize controller
         self.controller = CyberGearController(config, echo=False)
         self.controller.setup_motors()
         
-        # Cache motor information for faster access
-        self.motors = config.get("motors", [])
-        self._motor_ids = [m["id"] for m in self.motors]
+        # Use global motor IDs instead of extracting from config
+        self._motor_ids = get_motor_ids()
+        self._num_motors = get_motor_count()
         self._motor_names = [f"motor_{m_id}" for m_id in self._motor_ids]
         self._motor_id_to_index = {m_id: i for i, m_id in enumerate(self._motor_ids)}
         
+        # Log motor information using global parameters
+        self.get_logger().info(f"Initialized with {self._num_motors} motors: {self._motor_ids}")
+        
         # Pre-allocate arrays for joint states (more efficient than appending)
         self._js_names = tuple(self._motor_names)  # Tuple is immutable, slightly faster
-        self._num_motors = len(self.motors)
         
         # Create services
         self.create_service(SetParam, 'setparam', self.handle_setparam)
@@ -81,7 +91,7 @@ class CyberGearROS2Node(Node):
         )
         
         # Timer for regular updates
-        self.timer = self.create_timer(1/300.0, self.timer_callback)  # 100 Hz (original was 10 Hz)
+        self.timer = self.create_timer(1/300.0, self.timer_callback)  # 300 Hz
         
         # State tracking
         self.group_command = None
@@ -122,7 +132,7 @@ class CyberGearROS2Node(Node):
         msg_action = "Enable" if enable else "Disable"
         
         if motor_id == 0:
-            # All motors - use cached motor IDs
+            # All motors - use global motor IDs
             for m_id in self._motor_ids:
                 self.controller.enable_motor(m_id, cmd=enable)
             response.message = f"{msg_action} all motors"
@@ -144,7 +154,7 @@ class CyberGearROS2Node(Node):
         setter = dispatch.get(request.communication_type)
         if setter:
             if motor_id == 0:
-                # All motors - use cached motor IDs
+                # All motors - use global motor IDs
                 for m_id in self._motor_ids:
                     setter(m_id, request.param_name, request.param_value, echo=False)
                 response.message = f"Set {request.param_name} to {request.param_value} for all motors"
@@ -200,19 +210,24 @@ class CyberGearROS2Node(Node):
         """Process incoming motor control group commands"""
         # Early return for invalid messages
         if len(msg.motor_controls) != self._num_motors:
-            self.get_logger().warn(f"Received group command length ({len(msg.motor_controls)}) does not match number of motors ({self._num_motors})")
+            self.get_logger().warn(
+                f"Received group command length ({len(msg.motor_controls)}) "
+                f"does not match number of motors ({self._num_motors})"
+            )
             return
+            
         if self.controller.is_any_motor_enabled() == False:
             for m_id in self._motor_ids:
                 self.controller.enable_motor(m_id, cmd=True)
         
-        
         # Use a more efficient way to create the command dictionary
-        self.group_command = {self._motor_ids[i]: msg.motor_controls[i] for i in range(self._num_motors)}
+        self.group_command = {
+            self._motor_ids[i]: msg.motor_controls[i] 
+            for i in range(self._num_motors)
+        }
         self._last_cmd_time = self.get_clock().now().nanoseconds * 1e-9
         self.controller.send_group_command(self.group_command)
     
-
     def timer_callback(self):
         """Optimized timer callback for processing commands and publishing joint states with recovery logic"""
         # Get current time only once
@@ -257,12 +272,6 @@ class CyberGearROS2Node(Node):
                 log_parts.append(f"Recovery attempts: {self._recovery_counter} | ")
             
             self.get_logger().info("".join(log_parts))
-        
-        # Log joint states only if there are valid states or for debugging
-        if any(state is not None for state in joint_states.values()):
-            # Uncomment the line below if you want to see joint states every cycle
-            # self.get_logger().info(f"Joint states: {joint_states}")
-            pass
         
         # Handle communication issues
         if not health_status["is_healthy"]:
@@ -325,7 +334,7 @@ class CyberGearROS2Node(Node):
         """Check overall communication health and return metrics."""
         joint_states = self.controller.get_joint_states()
         
-        total_motors = len(self._motor_ids)
+        total_motors = self._num_motors  # Use cached value
         responding_motors = sum(1 for state in joint_states.values() if state is not None)
         
         health_ratio = responding_motors / total_motors if total_motors > 0 else 0
@@ -405,7 +414,7 @@ class CyberGearROS2Node(Node):
         except Exception as e:
             self.get_logger().error(f"Full reset failed: {e}")
     
-    # Add caching to reduce repeated calls for motor states - separating method and property
+    # Add caching to reduce repeated calls for motor states
     @functools.lru_cache(maxsize=1)
     def _get_cached_motor_states(self):
         return self.controller.get_motor_states()
